@@ -1,6 +1,29 @@
 from pyrogram import Client, filters
 import fitz  # PyMuPDF
 import os
+from flask import Flask
+import threading
+import logging
+
+# Initialize Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# Initialize Flask
+bot = Flask(__name__)
+
+@bot.route('/')
+def hello_world():
+    return 'Hello, World!'
+
+@bot.route('/health')
+def health_check():
+    return 'Healthy', 200
+
+def run_flask():
+    bot.run(host='0.0.0.0', port=8080)
+
 
 app = Client("my_bot", bot_token="7309568989:AAF48YF2QK7lz-BGMgOh0vmZKduTmCVIxfY")
 
@@ -41,4 +64,9 @@ async def merge_pdfs(client, message):
         os.remove(pdf_file)
     os.remove(output_path)
 
-app.run()
+# Start the Flask server in a separate thread
+if __name__ == '__main__':
+    threading.Thread(target=run_flask).start()
+    
+    # Start the Pyrogram Client
+    app.run()
