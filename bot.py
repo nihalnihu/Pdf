@@ -6,11 +6,9 @@ import os
 from flask import Flask
 import threading, logging
 
-
 # Initialize Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 # Initialize Flask
 bot = Flask(__name__)
@@ -23,6 +21,11 @@ def hello_world():
 def health_check():
     return 'Healthy', 200
 
+# Global flag for cancellation
+cancel_process = False
+
+def run_flask():
+    bot.run(host='0.0.0.0', port=5000)
 
 API_ID = '25731065'
 API_HASH = 'be534fb5a5afd8c3308c9ca92afde672'
@@ -40,9 +43,19 @@ def format_progress_bar(current, total, bar_length=10):
 async def start(client: Client, message: Message):
     await message.reply("Send me a ZIP file and I'll unzip it for you!")
 
+@app.on_message(filters.command('cancel'))
+async def cancel(client: Client, message: Message):
+    global cancel_process
+    cancel_process = True
+    await message.reply("Process has been canceled.")
+
 @app.on_message(filters.document)
 async def unzip_file(client: Client, message: Message):
+    global cancel_process
     if message.document.mime_type == 'application/zip':
+        # Reset the cancel flag
+        cancel_process = False
+
         # Send initial message and get the message ID
         progress_message = await message.reply("Downloading file...")
         download_path = 'temp.zip'
@@ -54,6 +67,8 @@ async def unzip_file(client: Client, message: Message):
 
         def download_progress(current, total):
             nonlocal downloaded_size
+            if cancel_process:
+                raise Exception("Process was canceled.")
             downloaded_size = current
             progress_text = format_progress_bar(downloaded_size, file_size)
             client.edit_message_text(message.chat.id, progress_message.id, f"Downloading file...\n{progress_text}")
@@ -61,8 +76,11 @@ async def unzip_file(client: Client, message: Message):
         try:
             await client.download_media(file_id, file_name=download_path, progress=download_progress)
         except Exception as e:
-            await client.edit_message_text(message.chat.id, progress_message.id, "Failed to download the file.")
-            print(f"Download error: {e}")
+            if str(e) == "Process was canceled.":
+                await client.edit_message_text(message.chat.id, progress_message.id, "Download canceled.")
+            else:
+                await client.edit_message_text(message.chat.id, progress_message.id, "Failed to download the file.")
+                logger.error(f"Download error: {e}")
             return
 
         # Check if file was downloaded
@@ -78,23 +96,34 @@ async def unzip_file(client: Client, message: Message):
                 processed_files = 0
                 progress_message = await client.send_message(message.chat.id, "Extracting files...")
                 for file_info in zip_ref.infolist():
+                    if cancel_process:
+                        raise Exception("Process was canceled.")
                     extracted_file = zip_ref.read(file_info.filename)
                     extracted_files.append((file_info.filename, io.BytesIO(extracted_file)))
                     processed_files += 1
                     progress_text = f"Extracting files...\n{processed_files}/{total_files} files processed"
                     client.edit_message_text(message.chat.id, progress_message.id, progress_text)
         except Exception as e:
-            await client.edit_message_text(message.chat.id, progress_message.id, "Failed to unzip the file.")
-            print(f"Unzip error: {e}")
+            if str(e) == "Process was canceled.":
+                await client.edit_message_text(message.chat.id, progress_message.id, "Extraction canceled.")
+            else:
+                await client.edit_message_text(message.chat.id, progress_message.id, "Failed to unzip the file.")
+                logger.error(f"Unzip error: {e}")
             return
 
         # Send the files back to the user
         for filename, file_bytes in extracted_files:
+            if cancel_process:
+                await client.send_message(message.chat.id, "Process was canceled.")
+                return
+
             file_size = len(file_bytes.getvalue())
             uploaded_size = 0
 
             def upload_progress(current, total):
                 nonlocal uploaded_size
+                if cancel_process:
+                    raise Exception("Process was canceled.")
                 uploaded_size = current
                 progress_text = format_progress_bar(uploaded_size, file_size)
                 client.edit_message_text(message.chat.id, progress_message.id, f"Uploading {filename}...\n{progress_text}")
@@ -109,18 +138,18 @@ async def unzip_file(client: Client, message: Message):
                 # Clean up message for next file
                 progress_message = await client.send_message(message.chat.id, f"Uploaded {filename}")
             except Exception as e:
-                await client.edit_message_text(message.chat.id, progress_message.id, f"Failed to upload {filename}.")
-                print(f"Upload error: {e}")
+                if str(e) == "Process was canceled.":
+                    await client.send_message(message.chat.id, "Upload canceled.")
+                else:
+                    await client.edit_message_text(message.chat.id, progress_message.id, f"Failed to upload {filename}.")
+                    logger.error(f"Upload error: {e}")
 
         # Clean up the temporary file
         if os.path.exists(download_path):
             os.remove(download_path)
         
-        await client.send_message(message.chat.id, "All files processed successfully!")
-
-
-
-
+        if not cancel_process:
+            await client.send_message(message.chat.id, "All files processed successfully!")
 
 # Start the Flask server in a separate thread
 if __name__ == '__main__':
