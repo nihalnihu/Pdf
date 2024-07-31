@@ -51,11 +51,14 @@ async def handle_document(client, message):
         file_name = f"{file_id}.pdf"
         download_path = await message.download(file_name)
         
-        if user_id not in user_files:
-            user_files[user_id] = []
+        if os.path.exists(download_path):
+            if user_id not in user_files:
+                user_files[user_id] = []
 
-        user_files[user_id].append(file_name)
-        await message.reply(f"File downloaded: {file_name}. Send more PDFs or type /merge to merge them.")
+            user_files[user_id].append(download_path)
+            await message.reply(f"File downloaded: {file_name}. Send more PDFs or type /merge to merge them.")
+        else:
+            await message.reply("Failed to download the file. Please try again.")
     else:
         await message.reply("Please send only PDF files.")
 
@@ -75,24 +78,35 @@ async def merge_pdfs(client, message):
     output_path = "merged_output.pdf"
     pdf_writer = fitz.open()
 
-    for pdf_file in pdf_files:
-        try:
-            pdf_reader = fitz.open(pdf_file)
-            pdf_writer.insert_pdf(pdf_reader)
-            pdf_reader.close()
-            logger.info(f"Merged file: {pdf_file}")
-        except Exception as e:
-            logger.error(f"Failed to process {pdf_file}: {e}")
+    try:
+        for pdf_file in pdf_files:
+            if os.path.exists(pdf_file):
+                pdf_reader = fitz.open(pdf_file)
+                if pdf_reader.page_count > 0:
+                    pdf_writer.insert_pdf(pdf_reader)
+                pdf_reader.close()
+                logger.info(f"Merged file: {pdf_file}")
+            else:
+                logger.error(f"File does not exist: {pdf_file}")
 
-    pdf_writer.save(output_path)
-    pdf_writer.close()
+        if pdf_writer.page_count > 0:
+            pdf_writer.save(output_path)
+            pdf_writer.close()
+            await message.reply_document(output_path)
+        else:
+            await message.reply("No pages to merge.")
+            pdf_writer.close()
 
-    await message.reply_document(output_path)
+    except Exception as e:
+        logger.error(f"Failed to merge PDFs: {e}")
+        await message.reply("An error occurred while merging PDFs. Please try again.")
 
     # Clean up files
     for pdf_file in pdf_files:
-        os.remove(pdf_file)
-    os.remove(output_path)
+        if os.path.exists(pdf_file):
+            os.remove(pdf_file)
+    if os.path.exists(output_path):
+        os.remove(output_path)
     del user_files[user_id]  # Clear the user's files
 
 # Start the Flask server in a separate thread
