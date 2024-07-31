@@ -74,7 +74,7 @@ async def unzip_file(client: Client, message: Message):
         def download_progress(current, total):
             nonlocal downloaded_size
             if cancel_process:
-                raise Exception("Process was canceled.")
+                return  # Exit the function gracefully
             downloaded_size = current
             progress_text = format_progress_bar(downloaded_size, file_size)
             client.edit_message_text(message.chat.id, progress_message.id, f"Downloading file...\n{progress_text}\n/cancel")
@@ -104,7 +104,8 @@ async def unzip_file(client: Client, message: Message):
                 cancel_message_id = progress_message.id
                 for file_info in zip_ref.infolist():
                     if cancel_process:
-                        raise Exception("Process was canceled.")
+                        await client.edit_message_text(message.chat.id, progress_message.id, "Extraction canceled.")
+                        return  # Exit gracefully
                     extracted_file = zip_ref.read(file_info.filename)
                     extracted_files.append((file_info.filename, io.BytesIO(extracted_file)))
                     processed_files += 1
@@ -130,7 +131,7 @@ async def unzip_file(client: Client, message: Message):
             def upload_progress(current, total):
                 nonlocal uploaded_size
                 if cancel_process:
-                    raise Exception("Process was canceled.")
+                    return  # Exit the function gracefully
                 uploaded_size = current
                 progress_text = format_progress_bar(uploaded_size, file_size)
                 client.edit_message_text(message.chat.id, progress_message.id, f"Uploading {filename}...\n{progress_text}\n/cancel")
