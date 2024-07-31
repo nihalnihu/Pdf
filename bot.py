@@ -26,9 +26,9 @@ def run_flask():
 # Initialize Pyrogram Client
 app = Client(
     "my_bot",
-    api_id=os.getenv("25731065"),         # Fetch from environment variable
-    api_hash=os.getenv("be534fb5a5afd8c3308c9ca92afde672"),     # Fetch from environment variable
-    bot_token=os.getenv("7309568989:AAF48YF2QK7lz-BGMgOh0vmZKduTmCVIxfY")    # Fetch from environment variable
+    api_id=25731065   # Fetch from environment variable
+    api_hash="be534fb5a5afd8c3308c9ca92afde672"   # Fetch from environment variable
+    bot_token="7309568989:AAF48YF2QK7lz-BGMgOh0vmZKduTmCVIxfY"   # Fetch from environment variable
 )
 
 # Dictionary to store user data
