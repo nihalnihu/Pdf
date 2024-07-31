@@ -47,17 +47,15 @@ async def start(client, message):
 async def handle_document(client, message):
     if message.document.mime_type == "application/pdf":
         user_id = message.from_user.id
-        file_name = message.document.file_name
+        file_id = message.document.file_id
+        file_name = f"{file_id}.pdf"
         download_path = await message.download(file_name)
         
-        if os.path.exists(download_path):
-            if user_id not in user_files:
-                user_files[user_id] = []
+        if user_id not in user_files:
+            user_files[user_id] = []
 
-            user_files[user_id].append(download_path)
-            await message.reply(f"File downloaded: {file_name}. Send more PDFs or type /merge to merge them.")
-        else:
-            await message.reply("Failed to download the file. Please try again.")
+        user_files[user_id].append(file_name)
+        await message.reply(f"File downloaded: {file_name}. Send more PDFs or type /merge to merge them.")
     else:
         await message.reply("Please send only PDF files.")
 
@@ -92,7 +90,7 @@ async def merge_pdfs(client, message):
             pdf_writer.save(output_path)
             pdf_writer.close()
             await message.reply_document(output_path)
-            await message.reply(f"File downloaded: {output_path}. Send more PDFs or type /merge to merge them.")
+            await message.reply(f"File downloaded: {os.path.basename(output_path)}. Send more PDFs or type /merge to merge them.")
         else:
             await message.reply("No pages to merge.")
             pdf_writer.close()
