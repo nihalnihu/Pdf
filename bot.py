@@ -5,45 +5,33 @@ import io
 import os
 from flask import Flask
 import threading, logging
-import signal
-import sys
 
 # Initialize Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Flask
-app = Flask(__name__)
+bot = Flask(__name__)
 
-# Global flag for cancellation
-cancel_process = False
-shutdown_flag = False
-
-def run_flask():
-    app.run(host='0.0.0.0', port=5000)
-
-@app.route('/')
+@bot.route('/')
 def hello_world():
     return 'Hello, World!'
 
-@app.route('/health')
+@bot.route('/health')
 def health_check():
     return 'Healthy', 200
 
-# Flask shutdown signal handler
-def handle_shutdown(signal_number, frame):
-    global shutdown_flag
-    shutdown_flag = True
-    print("Shutdown signal received. Stopping the server gracefully...")
-    # Here you can add any cleanup code if necessary
+# Global flag for cancellation
+cancel_process = False
 
-signal.signal(signal.SIGTERM, handle_shutdown)
+def run_flask():
+    bot.run(host='0.0.0.0', port=5000)
 
 API_ID = '25731065'
 API_HASH = 'be534fb5a5afd8c3308c9ca92afde672'
 BOT_TOKEN = '7242003111:AAHHAd-poxmx3ADkUbK-6z0-dYbgaVKF2PA'
 
-pyrogram_app = Client("zip_unzip_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("zip_unzip_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 def format_progress_bar(current, total, bar_length=10):
     filled_length = int(bar_length * current // total)
@@ -51,17 +39,17 @@ def format_progress_bar(current, total, bar_length=10):
     progress = (current / total) * 100
     return f'[{bar}] {progress:.2f}% Complete'
 
-@pyrogram_app.on_message(filters.command('start'))
+@app.on_message(filters.command('start'))
 async def start(client: Client, message: Message):
     await message.reply("Send me a ZIP file and I'll unzip it for you!")
 
-@pyrogram_app.on_message(filters.command('cancel'))
+@app.on_message(filters.command('cancel'))
 async def cancel(client: Client, message: Message):
     global cancel_process
     cancel_process = True
     await message.reply("Process has been canceled.")
 
-@pyrogram_app.on_message(filters.document)
+@app.on_message(filters.document)
 async def unzip_file(client: Client, message: Message):
     global cancel_process
     if message.document.mime_type == 'application/zip':
@@ -98,6 +86,7 @@ async def unzip_file(client: Client, message: Message):
         # Check if file was downloaded
         if not os.path.exists(download_path):
             await client.edit_message_text(message.chat.id, progress_message.id, "Downloaded file not found.")
+            logger.error(f"File not found: {download_path}")
             return
         
         # Unzip the file
@@ -114,7 +103,7 @@ async def unzip_file(client: Client, message: Message):
                     extracted_files.append((file_info.filename, io.BytesIO(extracted_file)))
                     processed_files += 1
                     progress_text = f"Extracting files...\n{processed_files}/{total_files} files processed"
-                    client.edit_message_text(message.chat.id, progress_message.id, progress_text + "\n/cancel")
+                    client.edit_message_text(message.chat.id, progress_message.id, progress_text)
         except Exception as e:
             if str(e) == "Process was canceled.":
                 await client.edit_message_text(message.chat.id, progress_message.id, "Extraction canceled.")
@@ -168,4 +157,4 @@ if __name__ == '__main__':
     threading.Thread(target=run_flask).start()
     
     # Start the Pyrogram Client
-    pyrogram_app.run()
+    app.run()
