@@ -9,7 +9,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 # Initialize Flask
 bot = Flask(__name__)
 
@@ -24,19 +23,22 @@ def health_check():
 def run_flask():
     bot.run(host='0.0.0.0', port=8080)
 
-
+# Initialize Pyrogram Client
 app = Client("my_bot", bot_token="7309568989:AAF48YF2QK7lz-BGMgOh0vmZKduTmCVIxfY")
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
     await message.reply("Send me PDF files to merge!")
 
-@app.on_message(filters.document("application/pdf"))
+@app.on_message(filters.document)
 async def handle_document(client, message):
-    file_id = message.document.file_id
-    file_name = f"{file_id}.pdf"
-    await message.download(file_name)
-    await message.reply(f"File downloaded: {file_name}")
+    if message.document.mime_type == "application/pdf":
+        file_id = message.document.file_id
+        file_name = f"{file_id}.pdf"
+        await message.download(file_name)
+        await message.reply(f"File downloaded: {file_name}")
+    else:
+        await message.reply("Please send only PDF files.")
 
 @app.on_message(filters.command("merge"))
 async def merge_pdfs(client, message):
