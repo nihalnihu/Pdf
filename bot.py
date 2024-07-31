@@ -24,7 +24,12 @@ def run_flask():
     bot.run(host='0.0.0.0', port=8080)
 
 # Initialize Pyrogram Client
-app = Client("my_bot", bot_token="7309568989:AAF48YF2QK7lz-BGMgOh0vmZKduTmCVIxfY")
+app = Client(
+    "my_bot",
+    api_id="25731065",         # Replace with your API ID
+    api_hash="be534fb5a5afd8c3308c9ca92afde672",     # Replace with your API hash
+    bot_token="7309568989:AAF48YF2QK7lz-BGMgOh0vmZKduTmCVIxfY"    # Replace with your Bot Token
+)
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
