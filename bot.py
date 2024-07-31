@@ -31,7 +31,7 @@ app = Client("my_bot", bot_token="7309568989:AAF48YF2QK7lz-BGMgOh0vmZKduTmCVIxfY
 async def start(client, message):
     await message.reply("Send me PDF files to merge!")
 
-@app.on_message(filters.document.mime_type("application/pdf"))
+@app.on_message(filters.document("application/pdf"))
 async def handle_document(client, message):
     file_id = message.document.file_id
     file_name = f"{file_id}.pdf"
