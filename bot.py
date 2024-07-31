@@ -71,7 +71,15 @@ async def unzip_file(client: Client, message: Message):
                 raise Exception("Process was canceled.")
             downloaded_size = current
             progress_text = format_progress_bar(downloaded_size, file_size)
-            client.edit_message_text(message.chat.id, progress_message.id, f"Downloading file...\n{progress_text}\n/cancel")
+            new_message_text = f"Downloading file...\n{progress_text}\n/cancel"
+
+            # Fetch current message content
+            async def update_progress():
+                current_message = await client.get_messages(message.chat.id, progress_message.id)
+                if current_message.text != new_message_text:
+                    await client.edit_message_text(message.chat.id, progress_message.id, new_message_text)
+            
+            client.loop.create_task(update_progress())
 
         try:
             await client.download_media(file_id, file_name=download_path, progress=download_progress)
@@ -103,7 +111,15 @@ async def unzip_file(client: Client, message: Message):
                     extracted_files.append((file_info.filename, io.BytesIO(extracted_file)))
                     processed_files += 1
                     progress_text = f"Extracting files...\n{processed_files}/{total_files} files processed"
-                    client.edit_message_text(message.chat.id, progress_message.id, progress_text)
+                    new_message_text = progress_text + "\n/cancel"
+
+                    # Fetch current message content
+                    async def update_progress():
+                        current_message = await client.get_messages(message.chat.id, progress_message.id)
+                        if current_message.text != new_message_text:
+                            await client.edit_message_text(message.chat.id, progress_message.id, new_message_text)
+                    
+                    client.loop.create_task(update_progress())
         except Exception as e:
             if str(e) == "Process was canceled.":
                 await client.edit_message_text(message.chat.id, progress_message.id, "Extraction canceled.")
@@ -127,7 +143,15 @@ async def unzip_file(client: Client, message: Message):
                     raise Exception("Process was canceled.")
                 uploaded_size = current
                 progress_text = format_progress_bar(uploaded_size, file_size)
-                client.edit_message_text(message.chat.id, progress_message.id, f"Uploading {filename}...\n{progress_text}\n/cancel")
+                new_message_text = f"Uploading {filename}...\n{progress_text}\n/cancel"
+
+                # Fetch current message content
+                async def update_progress():
+                    current_message = await client.get_messages(message.chat.id, progress_message.id)
+                    if current_message.text != new_message_text:
+                        await client.edit_message_text(message.chat.id, progress_message.id, new_message_text)
+                
+                client.loop.create_task(update_progress())
 
             try:
                 await client.send_document(
