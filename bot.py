@@ -5,35 +5,45 @@ import io
 import os
 from flask import Flask
 import threading, logging
+import signal
+import sys
 
 # Initialize Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Flask
-bot = Flask(__name__)
-
-@bot.route('/')
-def hello_world():
-    return 'Hello, World!'
-
-@bot.route('/health')
-def health_check():
-    return 'Healthy', 200
+app = Flask(__name__)
 
 # Global flag for cancellation
 cancel_process = False
-cancel_chat_id = None
-cancel_message_id = None
+shutdown_flag = False
 
 def run_flask():
-    bot.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=5000)
+
+@app.route('/')
+def hello_world():
+    return 'Hello, World!'
+
+@app.route('/health')
+def health_check():
+    return 'Healthy', 200
+
+# Flask shutdown signal handler
+def handle_shutdown(signal_number, frame):
+    global shutdown_flag
+    shutdown_flag = True
+    print("Shutdown signal received. Stopping the server gracefully...")
+    # Here you can add any cleanup code if necessary
+
+signal.signal(signal.SIGTERM, handle_shutdown)
 
 API_ID = '25731065'
 API_HASH = 'be534fb5a5afd8c3308c9ca92afde672'
 BOT_TOKEN = '7242003111:AAHHAd-poxmx3ADkUbK-6z0-dYbgaVKF2PA'
 
-app = Client("zip_unzip_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+pyrogram_app = Client("zip_unzip_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 def format_progress_bar(current, total, bar_length=10):
     filled_length = int(bar_length * current // total)
@@ -41,29 +51,25 @@ def format_progress_bar(current, total, bar_length=10):
     progress = (current / total) * 100
     return f'[{bar}] {progress:.2f}% Complete'
 
-@app.on_message(filters.command('start'))
+@pyrogram_app.on_message(filters.command('start'))
 async def start(client: Client, message: Message):
     await message.reply("Send me a ZIP file and I'll unzip it for you!")
 
-@app.on_message(filters.command('cancel'))
+@pyrogram_app.on_message(filters.command('cancel'))
 async def cancel(client: Client, message: Message):
-    global cancel_process, cancel_chat_id, cancel_message_id
-    if cancel_chat_id == message.chat.id and cancel_message_id:
-        cancel_process = True
-        await client.edit_message_text(cancel_chat_id, cancel_message_id, "Process canceled.")
-        cancel_message_id = None  # Clear message ID after canceling
+    global cancel_process
+    cancel_process = True
+    await message.reply("Process has been canceled.")
 
-@app.on_message(filters.document)
+@pyrogram_app.on_message(filters.document)
 async def unzip_file(client: Client, message: Message):
-    global cancel_process, cancel_chat_id, cancel_message_id
+    global cancel_process
     if message.document.mime_type == 'application/zip':
         # Reset the cancel flag
         cancel_process = False
-        cancel_chat_id = message.chat.id
 
         # Send initial message and get the message ID
-        progress_message = await message.reply("Downloading file...\n/cancel")
-        cancel_message_id = progress_message.id  # Save the progress message ID
+        progress_message = await message.reply("Downloading file...")
         download_path = 'temp.zip'
         
         # Download the ZIP file with progress bar
@@ -74,7 +80,7 @@ async def unzip_file(client: Client, message: Message):
         def download_progress(current, total):
             nonlocal downloaded_size
             if cancel_process:
-                return  # Exit the function gracefully
+                raise Exception("Process was canceled.")
             downloaded_size = current
             progress_text = format_progress_bar(downloaded_size, file_size)
             client.edit_message_text(message.chat.id, progress_message.id, f"Downloading file...\n{progress_text}\n/cancel")
@@ -100,17 +106,15 @@ async def unzip_file(client: Client, message: Message):
             with zipfile.ZipFile(download_path, 'r') as zip_ref:
                 total_files = len(zip_ref.infolist())
                 processed_files = 0
-                progress_message = await client.send_message(message.chat.id, "Extracting files...\n/cancel")
-                cancel_message_id = progress_message.id
+                progress_message = await client.send_message(message.chat.id, "Extracting files...")
                 for file_info in zip_ref.infolist():
                     if cancel_process:
-                        await client.edit_message_text(message.chat.id, progress_message.id, "Extraction canceled.")
-                        return  # Exit gracefully
+                        raise Exception("Process was canceled.")
                     extracted_file = zip_ref.read(file_info.filename)
                     extracted_files.append((file_info.filename, io.BytesIO(extracted_file)))
                     processed_files += 1
                     progress_text = f"Extracting files...\n{processed_files}/{total_files} files processed"
-                    client.edit_message_text(message.chat.id, progress_message.id, f"{progress_text}\n/cancel")
+                    client.edit_message_text(message.chat.id, progress_message.id, progress_text + "\n/cancel")
         except Exception as e:
             if str(e) == "Process was canceled.":
                 await client.edit_message_text(message.chat.id, progress_message.id, "Extraction canceled.")
@@ -131,7 +135,7 @@ async def unzip_file(client: Client, message: Message):
             def upload_progress(current, total):
                 nonlocal uploaded_size
                 if cancel_process:
-                    return  # Exit the function gracefully
+                    raise Exception("Process was canceled.")
                 uploaded_size = current
                 progress_text = format_progress_bar(uploaded_size, file_size)
                 client.edit_message_text(message.chat.id, progress_message.id, f"Uploading {filename}...\n{progress_text}\n/cancel")
@@ -144,8 +148,7 @@ async def unzip_file(client: Client, message: Message):
                     progress=upload_progress
                 )
                 # Clean up message for next file
-                progress_message = await client.send_message(message.chat.id, f"Uploaded {filename}\n/cancel")
-                cancel_message_id = progress_message.id
+                progress_message = await client.send_message(message.chat.id, f"Uploaded {filename}")
             except Exception as e:
                 if str(e) == "Process was canceled.":
                     await client.send_message(message.chat.id, "Upload canceled.")
@@ -165,4 +168,4 @@ if __name__ == '__main__':
     threading.Thread(target=run_flask).start()
     
     # Start the Pyrogram Client
-    app.run()
+    pyrogram_app.run()
