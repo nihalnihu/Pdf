@@ -3,6 +3,26 @@ from pyrogram.types import Message
 import zipfile
 import io
 import os
+from flask import Flask
+import threading, logging
+
+
+# Initialize Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# Initialize Flask
+bot = Flask(__name__)
+
+@bot.route('/')
+def hello_world():
+    return 'Hello, World!'
+
+@bot.route('/health')
+def health_check():
+    return 'Healthy', 200
+
 
 API_ID = '25731065'
 API_HASH = 'be534fb5a5afd8c3308c9ca92afde672'
