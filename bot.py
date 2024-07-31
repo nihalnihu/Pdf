@@ -118,4 +118,13 @@ async def unzip_file(client: Client, message: Message):
         
         await client.send_message(message.chat.id, "All files processed successfully!")
 
-app.run()
+
+
+
+
+# Start the Flask server in a separate thread
+if __name__ == '__main__':
+    threading.Thread(target=run_flask).start()
+    
+    # Start the Pyrogram Client
+    app.run()
