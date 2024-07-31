@@ -25,7 +25,7 @@ def health_check():
 cancel_process = False
 
 def run_flask():
-    bot.run(host='0.0.0.0', port=5000)
+    bot.run(host='0.0.0.0', port=8080)
 
 API_ID = '25731065'
 API_HASH = 'be534fb5a5afd8c3308c9ca92afde672'
